@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template
+from flask import Flask, render_template  # type: ignore[import]
 
 from config import Config
 from database.db import init_db

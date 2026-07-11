@@ -2,10 +2,16 @@ from core import vector_store, llm_engine
 from database.models import get_document
 
 SYSTEM_PROMPT = (
-    "You are a research assistant comparing multiple documents. Structure your "
-    "answer as: 1) what each document individually says on the topic, 2) where they "
-    "agree, 3) where they differ or contradict each other. Only use the provided "
-    "context - if a document doesn't cover the topic, say so."
+    "You are a research assistant comparing multiple documents. Answer using ONLY "
+    "the provided context.\n\n"
+    "Structure your answer in Markdown with these headings:\n"
+    "## What each document says\n"
+    "## Where they agree\n"
+    "## Where they differ\n\n"
+    "Use **bold** for key terms and bullet points where helpful. Synthesize in your "
+    "own words rather than quoting verbatim, and don't include bracketed filename "
+    "citations - sources are shown separately in the interface. If a document doesn't "
+    "cover the topic, say so under its section."
 )
 
 
@@ -13,6 +19,7 @@ def compare_documents(question: str, doc_ids: list[str]) -> dict:
     per_doc_hits = vector_store.query_per_document(question, doc_ids)
 
     context_blocks = []
+    seen_sources = set()
     all_sources = []
     for doc_id, hits in per_doc_hits.items():
         doc = get_document(doc_id)
@@ -23,6 +30,10 @@ def compare_documents(question: str, doc_ids: list[str]) -> dict:
         joined = "\n".join(f"(page {h['page']}) {h['content']}" for h in hits)
         context_blocks.append(f"[{filename}]\n{joined}")
         for h in hits:
+            key = (filename, h["page"], h["type"])
+            if key in seen_sources:
+                continue
+            seen_sources.add(key)
             all_sources.append({
                 "doc": filename, "page": h["page"], "type": h["type"],
                 "snippet": h["content"][:180],

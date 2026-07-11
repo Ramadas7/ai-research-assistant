@@ -4,8 +4,9 @@ from database.models import get_document
 MAP_PROMPT_SYSTEM = "Summarize the following excerpt from a research document in 2-3 sentences, keeping key facts, numbers, and findings."
 REDUCE_PROMPT_SYSTEM = (
     "You are combining partial summaries of a research document into one cohesive "
-    "summary. Structure it with these headings: Overview, Key Findings, Methodology "
-    "(if applicable), Notable Data/Tables/Figures. Be concise."
+    "summary. Write it in Markdown with these headings: ## Overview, ## Key Findings, "
+    "## Methodology (if applicable), ## Notable Data, Tables, or Figures. Use bullet "
+    "points under each heading where helpful. Be concise."
 )
 
 # How many chunks to bundle into one map-step call, to keep prompts from getting huge.

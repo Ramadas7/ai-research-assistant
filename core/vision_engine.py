@@ -14,6 +14,7 @@ import ollama
 from config import Config
 
 _vision_available = None  # cached after first check, None = not checked yet
+_vision_broken_at_runtime = False  # set True the first time an actual call fails
 
 
 def _extract_model_names(list_response) -> list[str]:
@@ -69,7 +70,9 @@ def describe_image(image_bytes: bytes, context_hint: str = "") -> str | None:
     labels, or numbers so the description is retrievable by semantic search.
     Returns None if the vision model isn't available (caller should skip).
     """
-    if not vision_model_ready():
+    global _vision_broken_at_runtime
+
+    if not vision_model_ready() or _vision_broken_at_runtime:
         return None
 
     b64_image = base64.b64encode(image_bytes).decode("utf-8")
@@ -90,5 +93,16 @@ def describe_image(image_bytes: bytes, context_hint: str = "") -> str | None:
         )
         return response["message"]["content"].strip()
     except Exception as e:
-        print(f"[vision_engine] failed to describe image: {e}")
+        # The model being *listed* doesn't guarantee it can actually run (e.g. the
+        # Ollama runtime is too old for this model's architecture). Don't retry
+        # this dozens of times across one document's images - fail once, log once,
+        # and let every remaining image skip instantly for the rest of this run.
+        _vision_broken_at_runtime = True
+        print(
+            f"[vision_engine] vision model call failed and will be disabled for the "
+            f"rest of this run: {e}\n"
+            f"[vision_engine] This usually means your Ollama installation is out of "
+            f"date for '{Config.OLLAMA_VISION_MODEL}'. Update Ollama from "
+            f"https://ollama.com/download and try again."
+        )
         return None

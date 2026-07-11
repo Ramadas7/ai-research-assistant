@@ -155,7 +155,9 @@ function renderMessage(role, content, sources = [], timestamp = null) {
   wrap.innerHTML = `
     <div class="msg-avatar">${role === "user" ? "🧑" : "🤖"}</div>
     <div>
-      <div class="msg-bubble">${escapeHtml(content).replace(/\n/g, "<br>")}${sourcesHtml}</div>
+      <div class="msg-bubble">${
+        role === "assistant" ? renderMarkdown(content) : escapeHtml(content).replace(/\n/g, "<br>")
+      }${sourcesHtml}</div>
       <div class="msg-time">${time}</div>
     </div>`;
   el("messages").appendChild(wrap);
@@ -166,6 +168,74 @@ function escapeHtml(str) {
   const div = document.createElement("div");
   div.textContent = str;
   return div.innerHTML;
+}
+
+function inlineFormat(text) {
+  return text
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*([^*]+)\*/g, "<em>$1</em>");
+}
+
+// Small dependency-free Markdown renderer - handles what LLM answers actually
+// use in practice: headers, bold/italic/inline code, fenced code blocks, and
+// bullet/numbered lists. Input is escaped first, so this is injection-safe.
+function renderMarkdown(raw) {
+  const lines = escapeHtml(raw).split("\n");
+  let html = "";
+  let inCode = false;
+  let codeBuffer = [];
+  let listType = null;
+  let paragraphBuffer = [];
+
+  const flushParagraph = () => {
+    if (paragraphBuffer.length) {
+      html += `<p>${inlineFormat(paragraphBuffer.join(" "))}</p>`;
+      paragraphBuffer = [];
+    }
+  };
+  const closeList = () => {
+    if (listType) { html += `</${listType}>`; listType = null; }
+  };
+
+  for (const line of lines) {
+    if (line.trim().startsWith("```")) {
+      if (!inCode) { flushParagraph(); closeList(); inCode = true; codeBuffer = []; }
+      else { html += `<pre><code>${codeBuffer.join("\n")}</code></pre>`; inCode = false; }
+      continue;
+    }
+    if (inCode) { codeBuffer.push(line); continue; }
+
+    const headerMatch = line.match(/^(#{1,6})\s+(.*)/);
+    if (headerMatch) {
+      flushParagraph(); closeList();
+      const level = headerMatch[1].length;
+      html += `<h${level}>${inlineFormat(headerMatch[2])}</h${level}>`;
+      continue;
+    }
+
+    const ulMatch = line.match(/^[-*]\s+(.*)/);
+    const olMatch = line.match(/^\d+\.\s+(.*)/);
+    if (ulMatch) {
+      flushParagraph();
+      if (listType !== "ul") { closeList(); html += "<ul>"; listType = "ul"; }
+      html += `<li>${inlineFormat(ulMatch[1])}</li>`;
+      continue;
+    }
+    if (olMatch) {
+      flushParagraph();
+      if (listType !== "ol") { closeList(); html += "<ol>"; listType = "ol"; }
+      html += `<li>${inlineFormat(olMatch[1])}</li>`;
+      continue;
+    }
+
+    if (line.trim() === "") { flushParagraph(); closeList(); continue; }
+    paragraphBuffer.push(line.trim());
+  }
+  flushParagraph();
+  closeList();
+  if (inCode) html += `<pre><code>${codeBuffer.join("\n")}</code></pre>`;
+  return html;
 }
 
 function startNewChat() {

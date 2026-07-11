@@ -1,10 +1,15 @@
 from core import vector_store, llm_engine, memory_manager
 
 SYSTEM_PROMPT = (
-    "You are a research assistant. Answer ONLY using the provided context. "
-    "If the context doesn't contain the answer, say so honestly instead of guessing. "
-    "When the context includes table data or figure descriptions, you may reference them. "
-    "Keep answers clear and directly grounded in the context."
+    "You are a research assistant. Answer using ONLY the information in the provided "
+    "context - if the answer isn't there, say so honestly instead of guessing.\n\n"
+    "Formatting rules:\n"
+    "- Write in clean Markdown: use **bold** for key terms, bullet or numbered lists "
+    "where they aid clarity, and fenced code blocks for any pseudocode, formulas, or code.\n"
+    "- Synthesize the answer in your own words rather than quoting the context verbatim.\n"
+    "- Do not include bracketed citations like '[filename.pdf]' in your answer - the "
+    "sources are already shown separately in the interface.\n"
+    "- Be concise and avoid repeating yourself."
 )
 
 
@@ -19,8 +24,13 @@ def _build_context(hits: list[dict]) -> str:
 
 
 def _build_sources(hits: list[dict]) -> list[dict]:
+    seen = set()
     sources = []
     for h in hits:
+        key = (h["filename"], h["page"], h["type"])
+        if key in seen:
+            continue
+        seen.add(key)
         sources.append({
             "doc": h["filename"],
             "page": h["page"],
