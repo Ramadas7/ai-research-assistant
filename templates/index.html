@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}AI Research Assistant{% endblock %}
+{% block content %}
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">✦</div>
+      <div>
+        <div class="brand-name">Research Assistant</div>
+        <div class="brand-sub">AI document intelligence</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-view="chat">💬 Chat</button>
+      <button class="nav-item" data-view="upload">⬆ Upload New</button>
+      <button class="nav-item" data-view="history">🕘 History</button>
+      <a class="nav-item" href="/about">ⓘ About</a>
+    </nav>
+
+    <div class="doc-panel">
+      <div class="doc-panel-title">Documents in scope</div>
+      <div id="doc-list" class="doc-list">
+        <p class="doc-empty">No documents yet — upload one to get started.</p>
+      </div>
+      <p id="mode-hint" class="mode-hint hidden"></p>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <section id="view-upload" class="view">
+      <div class="upload-hero">
+        <div class="upload-icon">⬆</div>
+        <h1>Upload Your Document</h1>
+        <p>Upload one or more PDFs — we handle text, tables, scanned pages, and figures automatically.</p>
+      </div>
+
+      <div id="dropzone" class="dropzone">
+        <div class="dropzone-icon">☁</div>
+        <p class="dropzone-title">Drag &amp; drop your PDF here</p>
+        <p class="dropzone-or">or</p>
+        <label class="btn-primary">
+          Choose PDF File
+          <input type="file" id="file-input" accept="application/pdf" hidden>
+        </label>
+        <p class="dropzone-note">Only PDF files are supported</p>
+      </div>
+
+      <div id="upload-status" class="upload-status hidden"></div>
+
+      <div class="how-it-works">
+        <div class="hiw-title">
+          <span class="hiw-title-icon">▤</span> How it works
+        </div>
+        <div class="hiw-grid">
+          <div class="hiw-step">
+            <span>1</span>
+            <div><b>Upload PDFs</b><p>Add one document or several to compare</p></div>
+          </div>
+          <div class="hiw-step">
+            <span>2</span>
+            <div><b>We process everything</b><p>Text, tables, scanned pages &amp; figures</p></div>
+          </div>
+          <div class="hiw-step">
+            <span>3</span>
+            <div><b>Ask, compare, summarize</b><p>Get grounded answers with page citations</p></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-chat" class="view hidden">
+      <header class="chat-header">
+        <div>
+          <h2 id="chat-title">Chat with Document</h2>
+          <p id="chat-subtitle">Ask anything about your document</p>
+        </div>
+        <div class="chat-actions">
+          <button id="btn-compare" class="btn-ghost hidden">Compare selected</button>
+          <button id="btn-summarize" class="btn-ghost">Summarize</button>
+          <button id="btn-new-chat" class="btn-ghost">New chat</button>
+        </div>
+      </header>
+
+      <div id="messages" class="messages"></div>
+
+      <form id="chat-form" class="chat-input-row">
+        <input type="text" id="chat-input" placeholder="Ask a question about your document..." autocomplete="off">
+        <button type="submit" class="btn-primary">➤ Send</button>
+      </form>
+    </section>
+
+    <section id="view-history" class="view hidden">
+      <header class="chat-header">
+        <div><h2>History</h2><p>Revisit previous conversations</p></div>
+      </header>
+      <div id="history-list" class="history-list"></div>
+    </section>
+
+  </main>
+</div>
+{% endblock %}

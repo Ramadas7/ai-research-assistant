@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+.env
+venv/
+.venv/
+
+# Runtime data — regenerated on first run, shouldn't be committed
+data/chroma_db/
+data/chat_history.db
+static/uploads/*
+!static/uploads/.gitkeep

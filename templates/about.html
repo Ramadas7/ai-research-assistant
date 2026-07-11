@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}About — AI Research Assistant{% endblock %}
+{% block content %}
+<div class="about-page">
+  <a href="/" class="back-link">← Back to app</a>
+  <h1>AI Research Assistant</h1>
+  <p class="about-lead">A local-first, privacy-respecting RAG pipeline for reasoning over research documents.</p>
+
+  <div class="about-grid">
+    <div class="about-card">
+      <h3>Pipeline</h3>
+      <p>PDF → text/table/OCR/vision extraction → chunking → embeddings → ChromaDB → semantic retrieval → Llama 3.2 → cited answer.</p>
+    </div>
+    <div class="about-card">
+      <h3>Multi-document</h3>
+      <p>Every chunk is tagged with its source document, so you can query across several PDFs at once or ask for a direct comparison.</p>
+    </div>
+    <div class="about-card">
+      <h3>Figures &amp; scanned pages</h3>
+      <p>Scanned pages are OCR'd with Tesseract. Embedded figures and graphs are described by a vision model (llama3.2-vision) so they become searchable text.</p>
+    </div>
+    <div class="about-card">
+      <h3>Memory</h3>
+      <p>Conversations are saved per session in SQLite, so follow-up questions and revisited chats keep full context.</p>
+    </div>
+    <div class="about-card">
+      <h3>100% local</h3>
+      <p>Embeddings and generation both run on-device via Ollama — no document content ever leaves your machine.</p>
+    </div>
+    <div class="about-card">
+      <h3>Stack</h3>
+      <p>Flask · ChromaDB · sentence-transformers · pdfplumber · PyMuPDF · Tesseract · Ollama (Llama 3.2 + Llama 3.2 Vision)</p>
+    </div>
+  </div>
+</div>
+{% endblock %}
