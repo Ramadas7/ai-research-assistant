@@ -38,6 +38,7 @@ class Config:
     # If the vision model isn't installed, the app degrades gracefully instead
     # of crashing: images/graphs are skipped and a warning is shown once.
     ENABLE_VISION = os.getenv("ENABLE_VISION", "true").lower() == "true"
+    MAX_IMAGES_PER_DOC = 12
 
     # Retrieval
     TOP_K = 5

@@ -1,4 +1,5 @@
 from core import vector_store, llm_engine, memory_manager
+from database.models import get_document
 
 SYSTEM_PROMPT = (
     "You are a research assistant. Answer using ONLY the information in the provided "
@@ -11,6 +12,60 @@ SYSTEM_PROMPT = (
     "sources are already shown separately in the interface.\n"
     "- Be concise and avoid repeating yourself."
 )
+
+# Phrases that signal a question is about the WHOLE document rather than one
+# specific fact. Top-k semantic search structurally can't answer these well -
+# there's rarely a single passage that reads "here's a summary of this book."
+BROAD_QUESTION_KEYWORDS = [
+    "what is this", "what's this", "summarize", "summary", "overview",
+    "key points", "list all", "list of all", "all the lessons", "all the chapters",
+    "explain this pdf", "explain this document", "main idea", "in brief",
+    "briefly explain", "characters in this book", "characters in the book",
+]
+
+BROAD_MAP_SYSTEM = (
+    "You are scanning one excerpt of a larger document to help answer a specific "
+    "question about the document as a whole. If this excerpt contains anything "
+    "relevant to the question, summarize it in 1-2 sentences. If it contains "
+    "nothing relevant, respond with exactly: NOT RELEVANT"
+)
+
+BROAD_REDUCE_SYSTEM = (
+    "You are answering a question about a document using notes gathered from "
+    "across the ENTIRE document, not just one passage. Write in clean Markdown: "
+    "use **bold** for key terms and bullet points where they help. Synthesize a "
+    "complete answer in your own words rather than just restating the notes."
+)
+
+BROAD_BATCH_SIZE = 6
+
+
+def is_broad_question(question: str) -> bool:
+    q = question.lower()
+    return any(kw in q for kw in BROAD_QUESTION_KEYWORDS)
+
+
+def _batch(items, size):
+    for i in range(0, len(items), size):
+        yield items[i:i + size]
+
+
+def _gather_relevant_notes(question: str, doc_ids: list[str]) -> tuple[list[str], list[str]]:
+    """Map step: scan every chunk of every doc, keep only what's relevant to the question."""
+    relevant_notes = []
+    doc_names = []
+    for doc_id in doc_ids:
+        doc = get_document(doc_id)
+        filename = doc["filename"] if doc else doc_id
+        doc_names.append(filename)
+
+        chunks = vector_store.get_all_chunks(doc_id)
+        for batch in _batch(chunks, BROAD_BATCH_SIZE):
+            excerpt = "\n\n".join(batch)
+            note = llm_engine.generate(f"Question: {question}\n\nExcerpt:\n{excerpt}", system=BROAD_MAP_SYSTEM)
+            if "NOT RELEVANT" not in note.upper():
+                relevant_notes.append(note)
+    return relevant_notes, doc_names
 
 
 def _build_context(hits: list[dict]) -> str:
@@ -55,3 +110,64 @@ def answer_question(question: str, doc_ids: list[str], session_id: str) -> dict:
     memory_manager.save_turn(session_id, question, answer, sources)
 
     return {"answer": answer, "sources": sources}
+
+def answer_question_stream(question: str, doc_ids: list[str], session_id: str):
+    """
+    Generator version of answer_question(): yields {"type": "token", "content": ...}
+    as the model generates, then saves the full turn to memory once complete and
+    yields a final {"type": "done", "sources": [...]} event.
+    """
+    hits = vector_store.query(question, doc_ids)
+    context = _build_context(hits)
+    history = memory_manager.get_recent_history(session_id)
+
+    prompt = (
+        f"Conversation so far:\n{history}\n\n" if history else ""
+    ) + f"Context from document(s):\n{context}\n\nQuestion: {question}\n\nAnswer:"
+
+    full_answer = []
+    for piece in llm_engine.generate_stream(prompt, system=SYSTEM_PROMPT):
+        full_answer.append(piece)
+        yield {"type": "token", "content": piece}
+
+    answer = "".join(full_answer)
+    sources = _build_sources(hits)
+    memory_manager.save_turn(session_id, question, answer, sources)
+
+    yield {"type": "done", "sources": sources}
+
+def answer_broad_question(question: str, doc_ids: list[str], session_id: str) -> dict:
+    """
+    For whole-document questions, scan every chunk in batches (map step),
+    keep only what's relevant, then answer from those notes (reduce step) -
+    instead of top-k semantic search, which has nothing to match against for
+    a question like "summarize this."
+    """
+    relevant_notes, doc_names = _gather_relevant_notes(question, doc_ids)
+    combined_notes = "\n".join(f"- {n}" for n in relevant_notes) or "No relevant information found."
+    prompt = f"Question: {question}\n\nNotes gathered from across the document(s):\n{combined_notes}\n\nAnswer:"
+
+    answer = llm_engine.generate(prompt, system=BROAD_REDUCE_SYSTEM)
+    sources = [{"doc": name, "page": "whole document", "type": "summary", "snippet": ""} for name in doc_names]
+    memory_manager.save_turn(session_id, question, answer, sources)
+
+    return {"answer": answer, "sources": sources}
+
+
+def answer_broad_question_stream(question: str, doc_ids: list[str], session_id: str):
+    """Streaming version: the map step (scanning chunks) isn't shown token-by-token -
+    it's internal note-gathering - but the final answer streams live once ready."""
+    relevant_notes, doc_names = _gather_relevant_notes(question, doc_ids)
+    combined_notes = "\n".join(f"- {n}" for n in relevant_notes) or "No relevant information found."
+    prompt = f"Question: {question}\n\nNotes gathered from across the document(s):\n{combined_notes}\n\nAnswer:"
+
+    full_answer = []
+    for piece in llm_engine.generate_stream(prompt, system=BROAD_REDUCE_SYSTEM):
+        full_answer.append(piece)
+        yield {"type": "token", "content": piece}
+
+    answer = "".join(full_answer)
+    sources = [{"doc": name, "page": "whole document", "type": "summary", "snippet": ""} for name in doc_names]
+    memory_manager.save_turn(session_id, question, answer, sources)
+
+    yield {"type": "done", "sources": sources}

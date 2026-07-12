@@ -78,10 +78,16 @@ def extract_pdf_content(filepath: str) -> dict:
                     chunks.append({"content": md, "page": page_num, "type": "table"})
 
     # ---- 4: embedded figures/graphs (best-effort, needs llama3.2-vision) ----
+# ---- embedded figures/graphs (best-effort, needs llama3.2-vision) ----
     if vision_model_ready():
+        images_processed = 0
         for i in range(len(doc_render)):
+            if images_processed >= Config.MAX_IMAGES_PER_DOC:
+                break
             page = doc_render[i]
             for img_index, img in enumerate(page.get_images(full=True)):
+                if images_processed >= Config.MAX_IMAGES_PER_DOC:
+                    break
                 xref = img[0]
                 try:
                     base_image = doc_render.extract_image(xref)
@@ -91,12 +97,18 @@ def extract_pdf_content(filepath: str) -> dict:
                     description = describe_image(image_bytes)
                     if description:
                         has_images = True
+                        images_processed += 1
                         chunks.append(
                             {"content": f"[Figure on page {i + 1}] {description}",
                              "page": i + 1, "type": "image"}
                         )
                 except Exception as e:
                     print(f"[document_loader] skipped image on page {i+1}: {e}")
+        if images_processed >= Config.MAX_IMAGES_PER_DOC:
+            print(
+                f"[document_loader] hit MAX_IMAGES_PER_DOC ({Config.MAX_IMAGES_PER_DOC}) - "
+                f"remaining images in this document were skipped for speed."
+            )
 
     doc_render.close()
 
