@@ -267,16 +267,25 @@ el("chat-form").addEventListener("submit", async (e) => {
   renderMessage("user", question);
   input.value = "";
 
+  const useCompare = state.compareModeActive && state.selectedDocIds.length >= 2;
+  if (useCompare) {
+    await sendNonStreaming("/api/compare", question);
+  } else {
+    await sendStreaming("/api/chat/stream", question);
+  }
+});
+
+function addThinkingBubble() {
   const thinking = document.createElement("div");
   thinking.className = "msg assistant";
-  thinking.id = "thinking-indicator";
   thinking.innerHTML = `<div class="msg-avatar">🤖</div><div class="msg-bubble">Thinking...</div>`;
   el("messages").appendChild(thinking);
   el("messages").scrollTop = el("messages").scrollHeight;
+  return thinking;
+}
 
-  const useCompare = state.compareModeActive && state.selectedDocIds.length >= 2;
-  const endpoint = useCompare ? "/api/compare" : "/api/chat";
-
+async function sendNonStreaming(endpoint, question) {
+  const thinking = addThinkingBubble();
   try {
     const res = await fetch(endpoint, {
       method: "POST",
@@ -288,20 +297,93 @@ el("chat-form").addEventListener("submit", async (e) => {
       }),
     });
     const data = await res.json();
-    document.getElementById("thinking-indicator")?.remove();
-
-    if (!res.ok) {
-      renderMessage("assistant", `⚠️ ${data.error}`);
-      return;
-    }
-
+    thinking.remove();
+    if (!res.ok) { renderMessage("assistant", `⚠️ ${data.error}`); return; }
     state.currentSessionId = data.session_id || state.currentSessionId;
     renderMessage("assistant", data.answer, data.sources || []);
   } catch (err) {
-    document.getElementById("thinking-indicator")?.remove();
+    thinking.remove();
     renderMessage("assistant", `⚠️ Something went wrong: ${err.message}`);
   }
-});
+}
+
+async function sendStreaming(endpoint, question) {
+  const wrap = document.createElement("div");
+  wrap.className = "msg assistant";
+  wrap.innerHTML = `
+    <div class="msg-avatar">🤖</div>
+    <div>
+      <div class="msg-bubble"><span class="stream-text">▍</span></div>
+      <div class="msg-time"></div>
+    </div>`;
+  el("messages").appendChild(wrap);
+  el("messages").scrollTop = el("messages").scrollHeight;
+
+  const bubble = wrap.querySelector(".msg-bubble");
+  const streamSpan = wrap.querySelector(".stream-text");
+  const timeEl = wrap.querySelector(".msg-time");
+
+  let fullText = "";
+  let sources = [];
+
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        question,
+        doc_ids: state.selectedDocIds,
+        session_id: state.currentSessionId,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = await res.json();
+      bubble.textContent = `⚠️ ${data.error}`;
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line);
+
+        if (event.type === "session") {
+          state.currentSessionId = event.session_id;
+        } else if (event.type === "progress") {
+          streamSpan.textContent = event.message + " ▍";
+          el("messages").scrollTop = el("messages").scrollHeight;
+        } else if (event.type === "token") {
+          fullText += event.content;
+          streamSpan.textContent = fullText + " ▍";
+          el("messages").scrollTop = el("messages").scrollHeight;
+        } else if (event.type === "done") {
+          sources = event.sources || [];
+        }
+      }
+    }
+
+    const sourcesHtml = sources.length
+      ? `<div class="sources">${sources.map(s =>
+          `<div class="source-chip">${s.doc} · page ${s.page} · ${s.type}</div>`).join("")}</div>`
+      : "";
+    bubble.innerHTML = renderMarkdown(fullText) + sourcesHtml;
+    timeEl.textContent = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (err) {
+    bubble.textContent = `⚠️ Something went wrong: ${err.message}`;
+  }
+}
 
 el("btn-summarize").addEventListener("click", async () => {
   if (state.selectedDocIds.length === 0) {

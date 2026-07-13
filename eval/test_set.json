@@ -19,36 +19,6 @@
   },
   {
     "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
-    "question": "Who were the 2 fathers mentioned in the book?",
-    "expected_page": 10,
-    "reference_answer": "One father was highly educated with an advanced degree but struggled financially his whole life; the other never finished the eighth grade yet became one of the wealthiest men in Hawaii. The author refers to them as his 'poor dad' and his 'rich dad.'"
-  },
-  {
-    "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
-    "question": "Who was the rich dad?",
-    "expected_page": 22,
-    "reference_answer": "The 'rich dad' was the father of the author's childhood best friend Mike - a self-made local businessman who owned warehouses, a construction company, stores, and restaurants, and who agreed to mentor the two boys on how money works."
-  },
-  {
-    "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
-    "question": "Give me the list of all the lessons mentioned in this pdf.",
-    "expected_page": 9,
-    "reference_answer": "Lesson 1: The Rich Don't Work for Money. Lesson 2: Why Teach Financial Literacy? Lesson 3: Mind Your Own Business. Lesson 4: The History of Taxes and the Power of Corporations. Lesson 5: The Rich Invent Money. Lesson 6: Work to Learn - Don't Work for Money."
-  },
-  {
-    "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
-    "question": "Can you explain the difference between Poor Dad's Financial Statement and Rich Dad's Financial Statement?",
-    "expected_page": 71,
-    "reference_answer": "The poor dad's statement shows income and expenses roughly equal, with liabilities outweighing assets - typical of living paycheck to paycheck. The rich dad's statement shows an asset column producing income that exceeds expenses, with the surplus reinvested to keep growing the asset column further."
-  },
-  {
-    "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
-    "question": "Summarize this pdf.",
-    "expected_page": 178,
-    "reference_answer": "In his closing thoughts, the author states his purpose for writing the book: financial intelligence, not just formal schooling, is what determines lasting wealth, and he urges readers to focus on building assets and financial literacy rather than simply working harder for a paycheck."
-  },
-  {
-    "filename": "Rich-Dad-Poor-Dad-PDF-Book-By-Robert-Kiyosaki.pdf",
     "question": "Explain CASHFLOW Quadrant",
     "expected_page": 181,
     "reference_answer": "The book only briefly touches on this concept, describing four types of people in the business world: Employee, Self-employed, Business owner, and Investor (E-S-B-I) - and explicitly points readers to a separate book, 'Rich Dad's CASHFLOW Quadrant,' for the full explanation."

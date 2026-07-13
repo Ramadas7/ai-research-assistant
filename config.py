@@ -42,6 +42,10 @@ class Config:
 
     # Retrieval
     TOP_K = 5
+    BROAD_QUESTION_BATCH_SIZE = 10
+    BROAD_QUESTION_MAX_CHUNKS = 40
+
+    OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 
     # Conversation memory: how many previous turns get fed back into the prompt
     MAX_HISTORY_TURNS = 6

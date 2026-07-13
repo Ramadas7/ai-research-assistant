@@ -1,5 +1,6 @@
 from core import vector_store, llm_engine, memory_manager
 from database.models import get_document
+from config import Config
 
 SYSTEM_PROMPT = (
     "You are a research assistant. Answer using ONLY the information in the provided "
@@ -13,9 +14,6 @@ SYSTEM_PROMPT = (
     "- Be concise and avoid repeating yourself."
 )
 
-# Phrases that signal a question is about the WHOLE document rather than one
-# specific fact. Top-k semantic search structurally can't answer these well -
-# there's rarely a single passage that reads "here's a summary of this book."
 BROAD_QUESTION_KEYWORDS = [
     "what is this", "what's this", "summarize", "summary", "overview",
     "key points", "list all", "list of all", "all the lessons", "all the chapters",
@@ -37,8 +35,6 @@ BROAD_REDUCE_SYSTEM = (
     "complete answer in your own words rather than just restating the notes."
 )
 
-BROAD_BATCH_SIZE = 6
-
 
 def is_broad_question(question: str) -> bool:
     q = question.lower()
@@ -50,22 +46,42 @@ def _batch(items, size):
         yield items[i:i + size]
 
 
-def _gather_relevant_notes(question: str, doc_ids: list[str]) -> tuple[list[str], list[str]]:
-    """Map step: scan every chunk of every doc, keep only what's relevant to the question."""
-    relevant_notes = []
+def _gather_relevant_notes(question: str, doc_ids: list[str]):
+    """
+    Generator: yields {"type": "progress", "message": ...} while scanning, then
+    a final {"type": "result", "notes": [...], "doc_names": [...]}.
+
+    Caps the total number of chunks scanned at Config.BROAD_QUESTION_MAX_CHUNKS
+    regardless of document size - a 564-chunk book and a 40-chunk paper take
+    roughly the same time. When a document exceeds the cap, it samples evenly
+    across the whole thing (every Nth chunk) rather than just the first N, so
+    coverage stays spread across the beginning, middle, and end.
+    """
     doc_names = []
+    all_batches = []
+
     for doc_id in doc_ids:
         doc = get_document(doc_id)
         filename = doc["filename"] if doc else doc_id
         doc_names.append(filename)
 
         chunks = vector_store.get_all_chunks(doc_id)
-        for batch in _batch(chunks, BROAD_BATCH_SIZE):
-            excerpt = "\n\n".join(batch)
-            note = llm_engine.generate(f"Question: {question}\n\nExcerpt:\n{excerpt}", system=BROAD_MAP_SYSTEM)
-            if "NOT RELEVANT" not in note.upper():
-                relevant_notes.append(note)
-    return relevant_notes, doc_names
+        if len(chunks) > Config.BROAD_QUESTION_MAX_CHUNKS:
+            step = len(chunks) / Config.BROAD_QUESTION_MAX_CHUNKS
+            chunks = [chunks[int(i * step)] for i in range(Config.BROAD_QUESTION_MAX_CHUNKS)]
+
+        all_batches.extend(_batch(chunks, Config.BROAD_QUESTION_BATCH_SIZE))
+
+    relevant_notes = []
+    total = len(all_batches)
+    for i, batch in enumerate(all_batches, start=1):
+        yield {"type": "progress", "message": f"Reading document... ({i}/{total})"}
+        excerpt = "\n\n".join(batch)
+        note = llm_engine.generate(f"Question: {question}\n\nExcerpt:\n{excerpt}", system=BROAD_MAP_SYSTEM)
+        if "NOT RELEVANT" not in note.upper():
+            relevant_notes.append(note)
+
+    yield {"type": "result", "notes": relevant_notes, "doc_names": doc_names}
 
 
 def _build_context(hits: list[dict]) -> str:
@@ -111,12 +127,8 @@ def answer_question(question: str, doc_ids: list[str], session_id: str) -> dict:
 
     return {"answer": answer, "sources": sources}
 
+
 def answer_question_stream(question: str, doc_ids: list[str], session_id: str):
-    """
-    Generator version of answer_question(): yields {"type": "token", "content": ...}
-    as the model generates, then saves the full turn to memory once complete and
-    yields a final {"type": "done", "sources": [...]} event.
-    """
     hits = vector_store.query(question, doc_ids)
     context = _build_context(hits)
     history = memory_manager.get_recent_history(session_id)
@@ -136,14 +148,13 @@ def answer_question_stream(question: str, doc_ids: list[str], session_id: str):
 
     yield {"type": "done", "sources": sources}
 
+
 def answer_broad_question(question: str, doc_ids: list[str], session_id: str) -> dict:
-    """
-    For whole-document questions, scan every chunk in batches (map step),
-    keep only what's relevant, then answer from those notes (reduce step) -
-    instead of top-k semantic search, which has nothing to match against for
-    a question like "summarize this."
-    """
-    relevant_notes, doc_names = _gather_relevant_notes(question, doc_ids)
+    relevant_notes, doc_names = [], []
+    for event in _gather_relevant_notes(question, doc_ids):
+        if event["type"] == "result":
+            relevant_notes, doc_names = event["notes"], event["doc_names"]
+
     combined_notes = "\n".join(f"- {n}" for n in relevant_notes) or "No relevant information found."
     prompt = f"Question: {question}\n\nNotes gathered from across the document(s):\n{combined_notes}\n\nAnswer:"
 
@@ -155,9 +166,13 @@ def answer_broad_question(question: str, doc_ids: list[str], session_id: str) ->
 
 
 def answer_broad_question_stream(question: str, doc_ids: list[str], session_id: str):
-    """Streaming version: the map step (scanning chunks) isn't shown token-by-token -
-    it's internal note-gathering - but the final answer streams live once ready."""
-    relevant_notes, doc_names = _gather_relevant_notes(question, doc_ids)
+    relevant_notes, doc_names = [], []
+    for event in _gather_relevant_notes(question, doc_ids):
+        if event["type"] == "progress":
+            yield event
+        else:
+            relevant_notes, doc_names = event["notes"], event["doc_names"]
+
     combined_notes = "\n".join(f"- {n}" for n in relevant_notes) or "No relevant information found."
     prompt = f"Question: {question}\n\nNotes gathered from across the document(s):\n{combined_notes}\n\nAnswer:"
 
